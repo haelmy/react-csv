@@ -9,14 +9,9 @@ class ReadableCsvStreamTest extends \PHPUnit_Framework_TestCase
 
   private $resource;
 
-  private $stream;
-
   public function setUp()
   {
     $this->resource = fopen('php://temp', 'r+');
-
-    $loop = $this->createLoopMock();
-    $this->stream = new ReadableCsvStream($this->resource, $loop);
   }
 
   /**
@@ -26,14 +21,33 @@ class ReadableCsvStreamTest extends \PHPUnit_Framework_TestCase
   {
     $capturedData = null;
 
-    $this->stream->on('data', function ($data) use (&$capturedData) {
+    $stream = new ReadableCsvStream($this->resource, $this->createLoopMock());
+    $stream->on('data', function ($data) use (&$capturedData) {
         $capturedData = $data;
     });
 
-    $this->writeToResource("foo,bar\n");
+    $this->writeToResource('foo,"bar",1,"""escaped"' . "\n");
 
-    $this->stream->handleData($this->resource);
-    $this->assertSame(array('foo', 'bar'), $capturedData);
+    $stream->handleData($this->resource);
+    $this->assertSame(array('foo', 'bar', '1', '"escaped'), $capturedData);
+  }
+
+  /**
+   * @test
+   */
+  public function itShouldUseOptionalArgumentsIfProvided()
+  {
+    $capturedData = null;
+
+    $stream = new ReadableCsvStream($this->resource, $this->createLoopMock(), 50, ';', '|');
+    $stream->on('data', function ($data) use (&$capturedData) {
+        $capturedData = $data;
+    });
+
+    $this->writeToResource('foo;|bar|;1;|||escaped|' . "\n");
+
+    $stream->handleData($this->resource);
+    $this->assertSame(array('foo', 'bar', '1', '|escaped'), $capturedData);
   }
 
   /**
@@ -43,14 +57,15 @@ class ReadableCsvStreamTest extends \PHPUnit_Framework_TestCase
   {
     $endOfStreamWasReached = false;
 
-    $this->stream->on('end', function() use (&$endOfStreamWasReached) {
+    $stream = new ReadableCsvStream($this->resource, $this->createLoopMock());
+    $stream->on('end', function() use (&$endOfStreamWasReached) {
       $endOfStreamWasReached = true;
     });
 
     fwrite($this->resource, "");
     rewind($this->resource);
 
-    $this->stream->handleData($this->resource);
+    $stream->handleData($this->resource);
     $this->assertTrue($endOfStreamWasReached);
   }
 
