@@ -17,6 +17,20 @@ class ReadableCsvStreamTest extends \PHPUnit_Framework_TestCase
   /**
    * @test
    */
+  public function itShouldAddTheResourceToTheLoopOnCreation()
+  {
+    $loop = $this->createLoopMock();
+    $loop
+      ->expects($this->once())
+      ->method('addReadStream')
+      ->with($this->resource, $this->isType('callable'));
+
+    $stream = new ReadableCsvStream($this->resource, $loop);
+  }
+
+  /**
+   * @test
+   */
   public function itShouldAllowToReadACsvStream()
   {
     $capturedData = null;
@@ -67,6 +81,55 @@ class ReadableCsvStreamTest extends \PHPUnit_Framework_TestCase
 
     $stream->handleData($this->resource);
     $this->assertTrue($endOfStreamWasReached);
+  }
+
+  /**
+   * @test
+   */
+  public function itShouldCloseTheResourceWhenTheEndIsReached()
+  {
+    $stream = new ReadableCsvStream($this->resource, $this->createLoopMock());
+    fwrite($this->resource, "");
+    rewind($this->resource);
+    $stream->handleData($this->resource);
+
+    $this->assertFalse(is_resource($this->resource));
+  }
+
+  /**
+   * @test
+   */
+  public function itShouldRemoveAllListenersWhenTheEndIsReached()
+  {
+    $stream = new ReadableCsvStream($this->resource, $this->createLoopMock());
+
+    $stream->on('data', function() {});
+    $stream->on('end', function() {});
+
+    fwrite($this->resource, "");
+    rewind($this->resource);
+    $stream->handleData($this->resource);
+
+    $this->assertEquals(array(), $stream->listeners('data'));
+    $this->assertEquals(array(), $stream->listeners('end'));
+  }
+
+  /**
+   * @test
+   */
+  public function itShouldRemoveTheResourceFromTheLoopWhenTheEndIsReached()
+  {
+    $loop = $this->createLoopMock();
+    $loop
+      ->expects($this->once())
+      ->method('removeStream')
+      ->with($this->resource);
+
+    $stream = new ReadableCsvStream($this->resource, $loop);
+
+    fwrite($this->resource, "");
+    rewind($this->resource);
+    $stream->handleData($this->resource);
   }
 
   private function writeToResource($data)

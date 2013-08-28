@@ -36,5 +36,12 @@ class ReadableCsvStream extends EventEmitter
   private function end()
   {
     $this->emit('end', array($this));
+
+    $this->loop->removeStream($this->stream);
+    $this->removeAllListeners();
+
+    if (is_resource($this->stream)) {
+      fclose($this->stream);
+    }
   }
 }
